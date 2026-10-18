@@ -1,340 +1,499 @@
-function doPost(e) {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    
-    let data;
-    if (e.postData && e.postData.contents) {
-      data = JSON.parse(e.postData.contents);
-    } else if (e.parameter && e.parameter.data) {
-      data = JSON.parse(e.parameter.data);
-    } else {
-      throw new Error('Nenhum dado recebido');
-    }
-    
-    const nome = data.nome || '';
-    const email = data.email || '';
-    const phone = data.phone || '';
-    const notaGeral = Number(data.notaGeral || 0);
-    const areas = data.areas || [];
-    const respostas = data.respostas || {};
-    
-    let classificacao = '';
-    if (notaGeral <= 40) classificacao = 'Momento de atenção';
-    else if (notaGeral <= 60) classificacao = 'Em construção';
-    else if (notaGeral <= 80) classificacao = 'Bom caminho';
-    else classificacao = 'Consolidado';
-    
-    const areasOrdenadas = areas.slice().sort(function(a, b) { return a.nota - b.nota; });
-    
-    sheet.appendRow([
-      new Date(),
-      nome,
-      email,
-      phone,
-      notaGeral,
-      classificacao,
-      JSON.stringify(areas),
-      JSON.stringify(respostas)
-    ]);
-    
-    enviarEmailLead(nome, email, notaGeral, classificacao, areasOrdenadas);
-    enviarEmailNotificacao(nome, email, phone, notaGeral, classificacao, areasOrdenadas);
-    
-    return ContentService
-      .createTextOutput(JSON.stringify({ status: 'ok', message: 'Lead registrado' }))
-      .setMimeType(ContentService.MimeType.JSON);
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Diagnóstico Financeiro Gratuito | Daniel - Planejador do Grupo Primo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .step-active { display: block; }
+    .step-hidden { display: none; }
+    .option-card { transition: all 0.2s; }
+    .option-card:hover { transform: translateY(-2px); }
+    .option-card.selected { border-color: #0d9488; background-color: #f0fdfa; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- HERO -->
+  <header class="bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+    <div class="max-w-3xl mx-auto px-6 py-16 text-center">
+      <span class="inline-block bg-teal-500/20 text-teal-300 px-4 py-1 rounded-full text-sm font-medium mb-6">
+        Planejador Financeiro — Grupo Primo
+      </span>
+      <h1 class="text-3xl md:text-5xl font-bold leading-tight mb-6">
+        Descubra em 5 minutos a saúde das suas finanças
+      </h1>
+      <p class="text-lg md:text-xl text-slate-300 mb-8">
+        Responda um questionário rápido e receba um diagnóstico personalizado com um plano de ação prático.
+      </p>
+      <button onclick="scrollToQuiz()" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold text-lg px-8 py-4 rounded-xl shadow-lg transition">
+        Fazer diagnóstico gratuito
+      </button>
+    </div>
+  </header>
+
+  <!-- COMO FUNCIONA -->
+  <section class="max-w-4xl mx-auto px-6 py-12">
+    <div class="grid md:grid-cols-3 gap-6 text-center">
+      <div class="bg-white p-6 rounded-xl shadow-sm">
+        <div class="w-12 h-12 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">1</div>
+        <h3 class="font-semibold mb-2">Responda 18 perguntas</h3>
+        <p class="text-slate-600 text-sm">Rápido, simples e sem pedir dados sensíveis.</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-sm">
+        <div class="w-12 h-12 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">2</div>
+        <h3 class="font-semibold mb-2">Receba sua nota</h3>
+        <p class="text-slate-600 text-sm">Veja seu panorama em 6 áreas financeiras.</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-sm">
+        <div class="w-12 h-12 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">3</div>
+        <h3 class="font-semibold mb-2">Tenha um plano de ação</h3>
+        <p class="text-slate-600 text-sm">Saiba exatamente por onde começar.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz" class="max-w-2xl mx-auto px-6 pb-16">
+    <div class="bg-white rounded-2xl shadow-lg p-6 md:p-10">
       
-  } catch (error) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ status: 'error', message: error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
+      <!-- Intro -->
+      <div id="step-intro" class="step-active text-center">
+        <h2 class="text-2xl font-bold mb-4">Vamos começar?</h2>
+        <p class="text-slate-600 mb-8">O questionário leva cerca de 5 minutos. Ao final, você pode receber seu resultado completo no e-mail.</p>
+        <button onclick="nextStep()" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-8 py-3 rounded-xl transition">
+          Começar questionário
+        </button>
+      </div>
 
-function enviarEmailLead(nome, email, notaGeral, classificacao, areas) {
-  const assunto = 'Seu Diagnóstico Financeiro Completo';
-  
-  const mensagemGeral = mensagemPorNota(notaGeral);
-  const prioridades = areas.slice(0, 2).map(function(a) { return a.label; }).join(' e ');
-  const proximos = proximosPassos(notaGeral, prioridades);
-  const areasHtml = montarAnaliseAreas(areas);
-  const planoAcao = montarPlanoAcao(areas, notaGeral);
-  
-  const corpo = [
-    '<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color: #334155; line-height: 1.6;">',
-    '<h2 style="color: #0f172a; margin-bottom: 8px;">Olá, ' + nome + '!</h2>',
-    '<p style="font-size: 16px;">Obrigado por fazer o diagnóstico financeiro. Preparei uma análise completa com os principais pontos de atenção e um plano de ação prático para você.</p>',
-    
-    '<div style="background: #f0fdfa; border-left: 4px solid #0d9488; padding: 20px; margin: 24px 0; border-radius: 8px;">',
-    '<p style="margin: 0; font-size: 16px; color: #64748b;">Sua nota geral</p>',
-    '<p style="margin: 4px 0; font-size: 32px; font-weight: bold; color: #0d9488;">' + notaGeral + '<span style="font-size: 18px; color: #64748b;">/100</span></p>',
-    '<p style="margin: 0; font-size: 18px; font-weight: 600; color: #0f172a;">' + classificacao + '</p>',
-    '</div>',
-    
-    '<h3 style="color: #0f172a; margin-top: 28px; font-size: 20px;">O que isso significa?</h3>',
-    '<p style="background: #f8fafc; padding: 16px; border-radius: 8px;">' + mensagemGeral + '</p>',
-    
-    '<h3 style="color: #0f172a; margin-top: 28px; font-size: 20px;">Análise por área</h3>',
-    '<p style="margin-bottom: 16px;">Abaixo você encontra o desempenho de cada área do seu planejamento financeiro, do ponto mais crítico para o mais forte:</p>',
-    areasHtml,
-    
-    '<h3 style="color: #0f172a; margin-top: 28px; font-size: 20px;">Seu plano de ação</h3>',
-    planoAcao,
-    
-    '<h3 style="color: #0f172a; margin-top: 28px; font-size: 20px;">Próximos passos</h3>',
-    '<p>' + proximos + '</p>',
-    
-    '<div style="background: #0f172a; color: white; padding: 24px; border-radius: 12px; margin: 32px 0; text-align: center;">',
-    '<p style="margin: 0 0 16px; font-size: 18px; font-weight: 600;">Quer transformar esse diagnóstico em um plano de ação personalizado?</p>',
-    '<p style="margin: 0 0 20px; color: #cbd5e1;">Vamos conversar. Eu vou te passar os horários disponíveis e entender melhor sua situação.</p>',
-    '<a href="https://wa.me/5519983461891?text=Oi%2C%20Daniel!%20Fiz%20o%20diagn%C3%B3stico%20financeiro%20e%20gostaria%20de%20agendar%20minha%20an%C3%A1lise%20gratuita." style="display: inline-block; background: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Agendar minha análise gratuita pelo WhatsApp</a>',
-    '</div>',
-    
-    '<p style="margin-top: 24px;">Um forte abraço,</p>',
-    '<p style="margin: 0;"><strong>Daniel</strong><br>Planejador Financeiro — Grupo Primo</p>',
-    
-    '<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0;">',
-    '<p style="font-size: 12px; color: #64748b; line-height: 1.5;">',
-    'Este diagnóstico tem caráter educativo e não substitui a orientação de um profissional qualificado. Os resultados são baseados nas respostas fornecidas e servem como ponto de partida para uma análise mais aprofundada.',
-    '</p>',
-    '</div>'
-  ].join('');
-  
-  GmailApp.sendEmail(email, assunto, '', { htmlBody: corpo });
-}
+      <!-- Pergunta -->
+      <div id="step-question" class="step-hidden">
+        <div class="mb-2">
+          <span id="progress-text" class="text-sm text-slate-500 font-medium"></span>
+        </div>
+        <div class="w-full bg-slate-200 rounded-full h-2 mb-6">
+          <div id="progress-bar" class="bg-teal-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+        </div>
+        <h2 id="question-text" class="text-xl md:text-2xl font-bold mb-6"></h2>
+        <div id="options-container" class="space-y-3"></div>
+        <div class="flex justify-between mt-8">
+          <button onclick="prevStep()" id="btn-prev" class="text-slate-500 hover:text-slate-800 font-medium px-4 py-2 hidden">
+            ← Voltar
+          </button>
+          <button onclick="nextStep()" id="btn-next" class="bg-slate-300 text-slate-500 font-semibold px-6 py-3 rounded-xl cursor-not-allowed" disabled>
+            Próxima
+          </button>
+        </div>
+      </div>
 
-function enviarEmailNotificacao(nome, email, phone, notaGeral, classificacao, areas) {
-  const seuEmail = Session.getActiveUser().getEmail();
-  const assunto = 'Novo lead - Diagnóstico Financeiro';
-  
-  let areasHtml = '';
-  for (let i = 0; i < areas.length; i++) {
-    areasHtml += '<li>' + areas[i].label + ': ' + areas[i].nota + '/100</li>';
-  }
-  
-  const whatsappLimpo = phone.replace(/\D/g, '');
-  
-  const corpo = [
-    '<div style="font-family: Arial, sans-serif; color: #334155;">',
-    '<h2 style="color: #0f172a;">Novo lead no diagnóstico!</h2>',
-    '<ul>',
-    '<li><strong>Nome:</strong> ' + nome + '</li>',
-    '<li><strong>E-mail:</strong> ' + email + '</li>',
-    '<li><strong>WhatsApp:</strong> ' + phone + '</li>',
-    '<li><strong>Nota:</strong> ' + notaGeral + '/100</li>',
-    '<li><strong>Classificação:</strong> ' + classificacao + '</li>',
-    '</ul>',
-    '<h3>Áreas:</h3>',
-    '<ul>' + areasHtml + '</ul>',
-    '<p><a href="https://wa.me/' + whatsappLimpo + '" style="background: #0d9488; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">Entrar em contato pelo WhatsApp</a></p>',
-    '</div>'
-  ].join('');
-  
-  GmailApp.sendEmail(seuEmail, assunto, '', { htmlBody: corpo });
-}
+      <!-- Resultado parcial -->
+      <div id="step-result" class="step-hidden text-center">
+        <h2 class="text-2xl font-bold mb-2">Seu diagnóstico está pronto!</h2>
+        <div class="text-5xl font-bold text-teal-600 my-6" id="final-score"></div>
+        <p id="final-classification" class="text-xl font-semibold mb-4"></p>
+        <p id="final-message" class="text-slate-600 mb-8"></p>
+        
+        <div id="areas-summary" class="text-left space-y-3 mb-8"></div>
 
-function mensagemPorNota(nota) {
-  if (nota <= 40) return 'Suas finanças estão passando por um momento desafiador, mas isso é totalmente reversível. O importante agora é parar de sangrar, organizar o básico e criar uma base sólida antes de pensar em investimentos.';
-  if (nota <= 60) return 'Você já tem algumas bases, mas ainda há espaço para ganhar mais segurança e clareza. Com pequenas mudanças no dia a dia e um planejamento mais estruturado, você pode evoluir bastante.';
-  if (nota <= 80) return 'Seu planejamento já está em um bom nível. Você provavelmente tem controle sobre a maior parte das suas finanças. O foco agora pode ser otimizar, diversificar e acelerar seus objetivos.';
-  return 'Parabéns! Suas finanças estão bem estruturadas. Você já tem hábitos sólidos. O foco agora pode ser otimizar seus investimentos, planejar o longo prazo e fazer seu dinheiro trabalhar melhor para você.';
-}
+        <div class="bg-slate-100 p-6 rounded-xl mb-8">
+          <h3 class="font-bold text-lg mb-2">Quer receber seu plano de ação completo?</h3>
+          <p class="text-slate-600 mb-4">Eu vou enviar seu diagnóstico detalhado + uma análise gratuita de 30 minutos.</p>
+          <button onclick="showLeadForm()" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-8 py-3 rounded-xl transition">
+            Receber meu diagnóstico completo
+          </button>
+        </div>
 
-function proximosPassos(nota, prioridades) {
-  if (nota <= 40) return 'O primeiro passo é organizar o básico: entender para onde o dinheiro está indo e proteger suas finanças. As áreas ' + prioridades + ' precisam de atenção imediata. Vamos conversar para eu entender sua situação real e montar um plano sem pressa.';
-  if (nota <= 60) return 'Vamos estruturar melhor ' + prioridades + '. Com um planejamento simples e direto, você já sente mais controle e tranquilidade. Uma conversa pode me ajudar a montar o próximo passo certo para você.';
-  if (nota <= 80) return 'Vamos ajustar ' + prioridades + ' e otimar o que já está funcionando. Pequenas mudanças agora geram grandes resultados no futuro.';
-  return 'Vamos revisar sua estratégia de investimentos e objetivos de longo prazo. O objetivo é manter o excelente ritmo e fazer seu patrimônio crescer de forma consistente.';
-}
+        <p class="text-xs text-slate-500 mt-6">
+          Este diagnóstico tem caráter educativo e não substitui a orientação de um profissional qualificado.
+        </p>
+      </div>
 
-function montarAnaliseAreas(areas) {
-  let html = '';
-  
-  for (let i = 0; i < areas.length; i++) {
-    const area = areas[i];
-    const analise = analisarArea(area.area, area.nota);
-    const corBarra = area.nota <= 40 ? '#ef4444' : area.nota <= 60 ? '#f97316' : area.nota <= 80 ? '#eab308' : '#22c55e';
-    
-    html += [
-      '<div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px;">',
-      '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">',
-      '<h4 style="margin: 0; color: #0f172a; font-size: 16px;">' + area.label + '</h4>',
-      '<span style="font-weight: bold; color: ' + corBarra + '; font-size: 16px;">' + area.nota + '/100</span>',
-      '</div>',
-      '<div style="background: #f1f5f9; border-radius: 6px; height: 8px; margin-bottom: 12px; overflow: hidden;">',
-      '<div style="background: ' + corBarra + '; height: 100%; width: ' + area.nota + '%; border-radius: 6px;"></div>',
-      '</div>',
-      '<p style="margin: 0 0 12px; color: #475569; font-size: 14px;">' + analise.interpretacao + '</p>',
-      '<div style="background: #f8fafc; padding: 12px; border-radius: 8px;">',
-      '<p style="margin: 0 0 8px; font-weight: 600; color: #0f172a; font-size: 14px;">Pontos de melhoria:</p>',
-      '<ul style="margin: 0; padding-left: 18px; color: #475569; font-size: 14px;">' + analise.melhorias.map(function(m) { return '<li style="margin-bottom: 4px;">' + m + '</li>'; }).join('') + '</ul>',
-      '</div>',
-      '</div>'
-    ].join('');
-  }
-  
-  return html;
-}
+      <!-- Captura de lead -->
+      <div id="step-lead" class="step-hidden">
+        <h2 class="text-2xl font-bold mb-2 text-center">Quase lá!</h2>
+        <p class="text-slate-600 text-center mb-6">Preencha seus dados para eu enviar seu plano de ação completo.</p>
+        
+        <form onsubmit="submitLead(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Nome</label>
+            <input type="text" id="lead-name" required class="w-full border border-slate-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Seu nome" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">E-mail</label>
+            <input type="email" id="lead-email" required class="w-full border border-slate-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="seu@email.com" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">WhatsApp</label>
+            <input type="tel" id="lead-phone" required class="w-full border border-slate-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="(00) 00000-0000" />
+          </div>
+          <div class="flex items-start gap-2">
+            <input type="checkbox" id="lead-consent" required class="mt-1" />
+            <label for="lead-consent" class="text-sm text-slate-600">
+              Aceito receber meu diagnóstico e contatos sobre educação financeira e serviços do Grupo Primo. Seus dados estão protegidos.
+            </label>
+          </div>
+          <button type="submit" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-4 rounded-xl transition">
+            Receber diagnóstico e agendar análise gratuita
+          </button>
+        </form>
+      </div>
 
-function analisarArea(area, nota) {
-  const analises = {
-    orcamento: {
-      interpretacao: 'Essa área mostra se você tem controle sobre o que entra e o que sai da sua conta todo mês.',
-      melhorias: nota <= 40 ? [
-        'Comece a anotar todos os gastos por pelo menos 30 dias',
-        'Defina um valor fixo de despesas essenciais',
-        'Evite usar o cartão de crédito até organizar o orçamento'
-      ] : nota <= 60 ? [
-        'Crie uma planilha simples ou use um app para acompanhar gastos',
-        'Estabeleça um valor mensal para gastos variáveis',
-        'Revista gastos recorrentes que podem ser reduzidos'
-      ] : nota <= 80 ? [
-        'Faça revisão mensal do orçamento',
-        'Automatize transferências para reserva e investimentos',
-        'Separe gastos por categorias para identificar vazamentos'
-      ] : [
-        'Mantenha o acompanhamento periódico',
-        'Reavalie metas de economia anualmente',
-        'Considere otimizar impostos e taxas sobre a renda'
-      ]
-    },
-    dividas: {
-      interpretacao: 'Essa área avalia se suas dívidas estão sob controle ou se estão prejudicando sua saúde financeira.',
-      melhorias: nota <= 40 ? [
-        'Liste todas as dívidas com valor, juros e prazo',
-        'Priorize quitar as com maior taxa de juros primeiro',
-        'Evite contrair novas dívidas enquanto não organizar as atuais'
-      ] : nota <= 60 ? [
-        'Renegocie dívidas com juros altos',
-        'Crie um plano mensal de amortização',
-        'Use o 13º salário e extras para abater o principal'
-      ] : nota <= 80 ? [
-        'Continue pagando em dia',
-        'Reduza o custo total das dívidas com portabilidade',
-        'Mantenha o comprometimento de renda com dívidas abaixo de 30%'
-      ] : [
-        'Mantenha o hábito de não financiar o que não é essencial',
-        'Use crédito de forma estratégica',
-        'Mantenha reserva para evitar novas dívidas'
-      ]
-    },
-    reserva: {
-      interpretacao: 'A reserva de emergência é a base da segurança financeira. Ela protege você contra imprevistos sem precisar recorrer a crédito.',
-      melhorias: nota <= 40 ? [
-        'Comece com um objetivo pequeno: 1 mês de gastos essenciais',
-        'Separe um valor todo mês, mesmo que seja pequeno',
-        'Guarde em um lugar de fácil acesso e sem risco'
-      ] : nota <= 60 ? [
-        'Aumente gradualmente para 3 meses de gastos',
-        'Destine um percentual fixo da renda para a reserva',
-        'Mantenha a reserva em um investimento líquido e seguro'
-      ] : nota <= 80 ? [
-        'Alcance a meta de 6 meses de gastos essenciais',
-        'Separe reserva de emergência de investimentos de longo prazo',
-        'Reavalie a reserva conforme sua renda muda'
-      ] : [
-        'Mantenha a reserva atualizada conforme seus gastos',
-        'Considere separar reservas para objetivos específicos',
-        'Revista a rentabilidade e liquidez onde está guardada'
-      ]
-    },
-    objetivos: {
-      interpretacao: 'Objetivos claros dão direção ao seu dinheiro e ajudam a manter o foco nos gastos e investimentos.',
-      melhorias: nota <= 40 ? [
-        'Escreva 3 objetivos financeiros que você quer alcançar',
-        'Estime quanto custa cada um deles',
-        'Defina um prazo realista para cada objetivo'
-      ] : nota <= 60 ? [
-        'Dê nomes e valores específicos para seus objetivos',
-        'Crie contas separadas para cada meta',
-        'Acompanhe o progresso mensalmente'
-      ] : nota <= 80 ? [
-        'Prioritize objetivos por importância e prazo',
-        'Ajuste valores conforme sua capacidade de poupança',
-        'Celebre pequenas conquistas no caminho'
-      ] : [
-        'Revista objetivos anualmente',
-        'Ajuste metas conforme mudanças de vida',
-        'Planeje objetivos de longo prazo como aposentadoria e herança'
-      ]
-    },
-    protecao: {
-      interpretacao: 'Proteção financeira inclui seguros e planejamento para proteger você e quem depende de você.',
-      melhorias: nota <= 40 ? [
-        'Avalie se você tem dependentes financeiros',
-        'Verifique a necessidade de seguro de vida e saúde',
-        'Comece a entender sua situação de risco atual'
-      ] : nota <= 60 ? [
-        'Contrate ou revise seu plano de saúde',
-        'Avalie seguro de vida com cobertura adequada',
-        'Organize documentos importantes em um só lugar'
-      ] : nota <= 80 ? [
-        'Revista anualmente os seguros contratados',
-        'Verifique se a cobertura está adequada à sua renda',
-        'Considere seguro por invalidez e doenças graves'
-      ] : [
-        'Mantenha seguros atualizados',
-        'Faça revisão periódica das coberturas',
-        'Considere planejamento sucessório e patrimonial'
-      ]
-    },
-    investimentos: {
-      interpretacao: 'Investimentos são o caminho para fazer seu dinheiro crescer e alcançar objetivos de médio e longo prazo.',
-      melhorias: nota <= 40 ? [
-        'Comece estudando os tipos básicos de investimentos',
-        'Entenda a diferença entre renda fixa e variável',
-        'Só invista após organizar dívidas e reserva de emergência'
-      ] : nota <= 60 ? [
-        'Diversifique entre diferentes tipos de investimentos',
-        'Defina seu perfil de investidor',
-        'Comece com aplicações de menor risco'
-      ] : nota <= 80 ? [
-        'Monte uma carteira diversificada alinhada ao seu perfil',
-        'Rebalanceie a carteira periodicamente',
-        'Acompanhe a evolução dos investimentos'
-      ] : [
-        'Otimize a alocação de acordo com seus objetivos',
-        'Considere investimentos internacionais',
-        'Planeje estratégias tributárias e sucessórias'
-      ]
+      <!-- Agradecimento -->
+      <div id="step-thanks" class="step-hidden text-center">
+        <div class="text-5xl mb-4">📩</div>
+        <h2 class="text-2xl font-bold mb-4">Diagnóstico enviado!</h2>
+        <p class="text-slate-600 mb-6">Em breve você receberá o resultado completo no e-mail. Agora é só escolher o melhor horário para nossa conversa.</p>
+        <a href="https://wa.me/5519983461891?text=Oi%2C%20Daniel!%20Fiz%20o%20diagn%C3%B3stico%20financeiro%20e%20gostaria%20de%20agendar%20minha%20an%C3%A1lise%20gratuita." target="_blank" class="inline-block bg-teal-500 hover:bg-teal-600 text-white font-semibold px-8 py-4 rounded-xl transition">
+          Agendar minha análise gratuita pelo WhatsApp
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- APRESENTAÇÃO -->
+  <section class="bg-white py-16">
+    <div class="max-w-3xl mx-auto px-6 text-center">
+      <div class="w-24 h-24 bg-slate-200 rounded-full mx-auto mb-6 flex items-center justify-center text-4xl">👤</div>
+      <h2 class="text-2xl md:text-3xl font-bold mb-4">Olá, eu sou o Daniel</h2>
+      <p class="text-lg text-slate-600 mb-6">
+        Planejador financeiro credenciado pelo <strong>Grupo Primo</strong>. Meu trabalho é ajudar pessoas a organizarem suas finanças e tomarem decisões mais seguras — com um plano claro, sem promessas de enriquecimento rápido.
+      </p>
+      <p class="text-slate-600">
+        Parte de uma comunidade com metodologia validada, focada em educação financeira e planejamento de verdade.
+      </p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-900 text-slate-400 py-8 text-center text-sm">
+    <p class="max-w-2xl mx-auto px-6">
+      Este diagnóstico é uma estimativa baseada nas respostas fornecidas e tem caráter educativo. Não substitui uma análise financeira detalhada nem a orientação de um profissional qualificado.
+    </p>
+    <p class="mt-4">© 2026 Daniel — Planejador Financeiro do Grupo Primo</p>
+  </footer>
+
+  <script>
+    const perguntas = [
+      { id: "Q1", area: "orcamento", areaLabel: "Orçamento", areaWeight: 0.20, text: "Você sabe, aproximadamente, qual é sua renda mensal?", weightInArea: 0.20, options: [
+        { label: "Sim, com precisão", value: "precisao", score: 100 },
+        { label: "Tenho uma ideia aproximada", value: "aproximada", score: 50 },
+        { label: "Não sei", value: "naosei", score: 0 }
+      ]},
+      { id: "Q2", area: "orcamento", areaLabel: "Orçamento", areaWeight: 0.20, text: "Você acompanha para onde seu dinheiro vai todo mês?", weightInArea: 0.25, options: [
+        { label: "Sim, de forma detalhada", value: "detalhada", score: 100 },
+        { label: "Mais ou menos, de forma informal", value: "informal", score: 50 },
+        { label: "Não acompanho", value: "nao", score: 0 }
+      ]},
+      { id: "Q3", area: "orcamento", areaLabel: "Orçamento", areaWeight: 0.20, text: "No mês passado, sua renda foi suficiente para cobrir todos os gastos?", weightInArea: 0.30, options: [
+        { label: "Sobrou dinheiro", value: "sobrou", score: 100 },
+        { label: "Ficou no zero a zero", value: "zero", score: 50 },
+        { label: "Faltou dinheiro", value: "faltou", score: 0 }
+      ]},
+      { id: "Q4", area: "orcamento", areaLabel: "Orçamento", areaWeight: 0.20, text: "Quanto da sua renda mensal você consegue economizar ou investir?", weightInArea: 0.25, options: [
+        { label: "Mais de 30%", value: "30+", score: 100 },
+        { label: "21-30%", value: "21-30", score: 75 },
+        { label: "11-20%", value: "11-20", score: 50 },
+        { label: "1-10%", value: "1-10", score: 25 },
+        { label: "0%", value: "0", score: 0 }
+      ]},
+      { id: "Q5", area: "dividas", areaLabel: "Dívidas", areaWeight: 0.20, text: "Você tem dívidas em aberto hoje?", weightInArea: 0.30, options: [
+        { label: "Não tenho dívidas", value: "nao", score: 100 },
+        { label: "Tenho, mas estão sob controle", value: "controle", score: 75 },
+        { label: "Tenho e me preocupam", value: "preocupam", score: 0 }
+      ]},
+      { id: "Q7", area: "dividas", areaLabel: "Dívidas", areaWeight: 0.20, text: "Qual parcela da sua renda mensal é usada para pagar dívidas?", weightInArea: 0.40, options: [
+        { label: "0%", value: "0", score: 100 },
+        { label: "1-15%", value: "1-15", score: 75 },
+        { label: "16-30%", value: "16-30", score: 50 },
+        { label: "31-50%", value: "31-50", score: 25 },
+        { label: "Mais de 50%", value: "50+", score: 0 }
+      ]},
+      { id: "Q8", area: "dividas", areaLabel: "Dívidas", areaWeight: 0.20, text: "Você atrasou pagamentos nos últimos 6 meses?", weightInArea: 0.30, options: [
+        { label: "Nunca", value: "nunca", score: 100 },
+        { label: "Uma ou duas vezes", value: "poucas", score: 50 },
+        { label: "Com frequência", value: "frequente", score: 0 }
+      ]},
+      { id: "Q9", area: "reserva", areaLabel: "Reserva de Emergência", areaWeight: 0.20, text: "Você tem uma reserva financeira para emergências?", weightInArea: 0.20, options: [
+        { label: "Sim", value: "sim", score: 100 },
+        { label: "Não", value: "nao", score: 0 }
+      ]},
+      { id: "Q10", area: "reserva", areaLabel: "Reserva de Emergência", areaWeight: 0.20, text: "Quanto tempo essa reserva cobriria seus gastos essenciais?", weightInArea: 0.50, options: [
+        { label: "Mais de 6 meses", value: "6+", score: 100 },
+        { label: "3-6 meses", value: "3-6", score: 75 },
+        { label: "1-3 meses", value: "1-3", score: 50 },
+        { label: "Menos de 1 mês", value: "menos1", score: 25 },
+        { label: "Não tenho reserva", value: "nao", score: 0 }
+      ]},
+      { id: "Q11", area: "reserva", areaLabel: "Reserva de Emergência", areaWeight: 0.20, text: "Se surgisse um gasto inesperado hoje, como resolveria?", weightInArea: 0.30, options: [
+        { label: "Usaria minha reserva", value: "reserva", score: 100 },
+        { label: "Usaria cartão ou empréstimo", value: "credito", score: 50 },
+        { label: "Pediria dinheiro a alguém", value: "pedir", score: 25 },
+        { label: "Não saberia como resolver", value: "naosei", score: 0 }
+      ]},
+      { id: "Q12", area: "objetivos", areaLabel: "Objetivos Financeiros", areaWeight: 0.15, text: "Você tem objetivos financeiros definidos?", weightInArea: 0.50, options: [
+        { label: "Sim, com prazo e valor", value: "estruturado", score: 100 },
+        { label: "Sim, mas sem plano claro", value: "sem_plano", score: 50 },
+        { label: "Não tenho objetivos definidos", value: "nao", score: 0 }
+      ]},
+      { id: "Q13", area: "objetivos", areaLabel: "Objetivos Financeiros", areaWeight: 0.15, text: "Você está guardando dinheiro de forma direcionada para algum objetivo?", weightInArea: 0.50, options: [
+        { label: "Sim, regularmente", value: "regular", score: 100 },
+        { label: "Às vezes", value: "as_vezes", score: 50 },
+        { label: "Não", value: "nao", score: 0 }
+      ]},
+      { id: "Q14", area: "protecao", areaLabel: "Proteção e Seguros", areaWeight: 0.10, text: "Você ou sua família têm plano de saúde ou cobertura médica?", weightInArea: 0.35, options: [
+        { label: "Sim, particular ou empresarial", value: "sim", score: 100 },
+        { label: "Apenas sistema público", value: "publico", score: 50 },
+        { label: "Não tenho nenhuma cobertura", value: "nao", score: 0 }
+      ]},
+      { id: "Q15", area: "protecao", areaLabel: "Proteção e Seguros", areaWeight: 0.10, text: "Você possui algum seguro relevante?", weightInArea: 0.35, options: [
+        { label: "Sim, tenho os necessários", value: "sim", score: 100 },
+        { label: "Tenho alguns, mas faltam outros", value: "alguns", score: 50 },
+        { label: "Não tenho nenhum", value: "nao", score: 0 }
+      ]},
+      { id: "Q16", area: "protecao", areaLabel: "Proteção e Seguros", areaWeight: 0.10, text: "Se parasse de trabalhar por saúde, haveria alguém dependendo financeiramente de você?", weightInArea: 0.30, options: [
+        { label: "Não, só eu", value: "nao", score: 100 },
+        { label: "Sim, tenho dependentes", value: "sim", score: 0 }
+      ]},
+      { id: "Q17", area: "investimentos", areaLabel: "Investimentos e Futuro", areaWeight: 0.15, text: "Você tem algum dinheiro investido hoje?", weightInArea: 0.50, options: [
+        { label: "Sim, em mais de um tipo", value: "diversificado", score: 100 },
+        { label: "Sim, mas apenas em um lugar", value: "unico", score: 50 },
+        { label: "Não tenho investimentos", value: "nao", score: 0 }
+      ]},
+      { id: "Q18", area: "investimentos", areaLabel: "Investimentos e Futuro", areaWeight: 0.15, text: "Você já pensou ou está se preparando financeiramente para a aposentadoria?", weightInArea: 0.50, options: [
+        { label: "Sim, tenho um plano estruturado", value: "estruturado", score: 100 },
+        { label: "Já pensei, mas não tenho plano", value: "sem_plano", score: 50 },
+        { label: "Nunca pensei nisso", value: "nao", score: 0 }
+      ]}
+    ];
+
+    let currentStep = -1;
+    const respostas = {};
+
+    function scrollToQuiz() {
+      document.getElementById('quiz').scrollIntoView({ behavior: 'smooth' });
     }
-  };
-  
-  return analises[area] || { interpretacao: 'Área em análise.', melhorias: ['Continue acompanhando esta área.'] };
-}
 
-function montarPlanoAcao(areas, notaGeral) {
-  const prioritarias = areas.slice(0, 3);
-  let html = '<ol style="padding-left: 20px; margin: 0;">';
-  
-  for (let i = 0; i < prioritarias.length; i++) {
-    const area = prioritarias[i];
-    html += '<li style="margin-bottom: 12px;"><strong>' + area.label + ' (' + area.nota + '/100):</strong> ' + acaoPrincipal(area.area, area.nota) + '</li>';
-  }
-  
-  if (notaGeral > 60) {
-    html += '<li style="margin-bottom: 12px;"><strong>Manter o bom ritmo:</strong> Continue acompanhando suas finanças mensalmente e ajustando o planejamento.</li>';
-  }
-  
-  html += '</ol>';
-  return html;
-}
+    function showStep(index) {
+      document.querySelectorAll('[id^="step-"]').forEach(el => {
+        el.classList.remove('step-active');
+        el.classList.add('step-hidden');
+      });
 
-function acaoPrincipal(area, nota) {
-  const acoes = {
-    orcamento: nota <= 40 ? 'Anote todos os gastos por 30 dias para entender para onde o dinheiro vai.' : 'Crie uma rotina mensal de revisão do orçamento.',
-    dividas: nota <= 40 ? 'Liste todas as dívidas e comece a quitar as com maiores juros.' : 'Mantenha o pagamento em dia e avalie redução de custos.',
-    reserva: nota <= 40 ? 'Comece a guardar um valor fixo mensal para construir sua reserva.' : 'Aumente gradualmente até atingir 6 meses de gastos essenciais.',
-    objetivos: nota <= 40 ? 'Defina seus objetivos financeiros com valor e prazo.' : 'Acompanhe o progresso e ajuste suas metas.',
-    protecao: nota <= 40 ? 'Avalie a necessidade de plano de saúde e seguro de vida.' : 'Revista anualmente suas coberturas.',
-    investimentos: nota <= 40 ? 'Estude os tipos de investimentos antes de aplicar.' : 'Diversifique sua carteira conforme seu perfil.'
-  };
-  
-  return acoes[area] || 'Continue acompanhando esta área.';
-}
+      if (index === -1) {
+        document.getElementById('step-intro').classList.remove('step-hidden');
+        document.getElementById('step-intro').classList.add('step-active');
+      } else if (index < perguntas.length) {
+        document.getElementById('step-question').classList.remove('step-hidden');
+        document.getElementById('step-question').classList.add('step-active');
+        renderQuestion(index);
+      } else {
+        showResult();
+      }
+    }
 
-function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ status: 'ok', message: 'Webhook ativo' }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+    function renderQuestion(index) {
+      const p = perguntas[index];
+      document.getElementById('progress-text').textContent = `Pergunta ${index + 1} de ${perguntas.length}`;
+      document.getElementById('progress-bar').style.width = `${((index + 1) / perguntas.length) * 100}%`;
+      document.getElementById('question-text').textContent = p.text;
+      
+      const container = document.getElementById('options-container');
+      container.innerHTML = '';
+      
+      p.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = `option-card w-full text-left p-4 border-2 border-slate-200 rounded-xl hover:border-teal-300 ${respostas[p.id] === opt.value ? 'selected' : ''}`;
+        btn.innerHTML = `<span class="font-medium">${opt.label}</span>`;
+        btn.onclick = () => selectOption(p.id, opt.value);
+        container.appendChild(btn);
+      });
+
+      document.getElementById('btn-prev').classList.toggle('hidden', index === 0);
+      updateNextButton();
+    }
+
+    function selectOption(questionId, value) {
+      respostas[questionId] = value;
+      renderQuestion(currentStep);
+      setTimeout(() => {
+        if (currentStep < perguntas.length - 1) {
+          currentStep++;
+          showStep(currentStep);
+        } else {
+          showResult();
+        }
+      }, 250);
+    }
+
+    function updateNextButton() {
+      const btn = document.getElementById('btn-next');
+      const p = perguntas[currentStep];
+      const answered = respostas[p.id];
+      btn.disabled = !answered;
+      if (answered) {
+        btn.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+        btn.classList.add('bg-teal-500', 'text-white', 'hover:bg-teal-600');
+      } else {
+        btn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+        btn.classList.remove('bg-teal-500', 'text-white', 'hover:bg-teal-600');
+      }
+    }
+
+    function nextStep() {
+      if (currentStep < perguntas.length - 1) {
+        currentStep++;
+        showStep(currentStep);
+      } else {
+        showResult();
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 0) {
+        currentStep--;
+        showStep(currentStep);
+      }
+    }
+
+    function classificarNota(nota) {
+      if (nota <= 40) return { label: "Momento de atenção", color: "text-red-500", message: "Seu planejamento financeiro parece estar passando por um momento desafiador. O primeiro passo é identificar por onde começar." };
+      if (nota <= 60) return { label: "Em construção", color: "text-orange-500", message: "Você já tem algumas bases organizadas, mas ainda há pontos relevantes para fortalecer." };
+      if (nota <= 80) return { label: "Bom caminho", color: "text-yellow-500", message: "Seu planejamento financeiro está em um bom nível. Alguns ajustes pontuais podem trazer mais segurança." };
+      return { label: "Consolidado", color: "text-green-500", message: "Seu planejamento financeiro está bem estruturado. O foco agora pode ser otimizar e acelerar seus objetivos." };
+    }
+
+    function calcularResultado() {
+      const grupos = {};
+      perguntas.forEach(p => {
+        if (!grupos[p.area]) grupos[p.area] = [];
+        grupos[p.area].push(p);
+      });
+
+      const areas = [];
+
+      for (const areaKey in grupos) {
+        const perguntasArea = grupos[areaKey];
+        let somaPonderada = 0;
+        let somaPesos = 0;
+
+        perguntasArea.forEach(p => {
+          if (p.weightInArea === 0) return;
+          const resposta = respostas[p.id];
+          const opcao = p.options.find(o => o.value === resposta);
+          if (opcao) {
+            somaPonderada += opcao.score * p.weightInArea;
+            somaPesos += p.weightInArea;
+          }
+        });
+
+        let notaArea = somaPesos > 0 ? somaPonderada / somaPesos : 0;
+
+        if (areaKey === "dividas" && respostas["Q5"] === "preocupam" && respostas["Q8"] === "frequente") {
+          notaArea = Math.min(notaArea, 30);
+        }
+        if (areaKey === "reserva" && respostas["Q9"] === "nao" && respostas["Q11"] === "naosei") {
+          notaArea = 0;
+        }
+        if (areaKey === "protecao" && respostas["Q16"] === "sim" && respostas["Q15"] === "nao") {
+          notaArea = Math.min(notaArea, 20);
+        }
+
+        areas.push({
+          area: areaKey,
+          label: perguntasArea[0].areaLabel,
+          nota: Math.round(notaArea),
+          peso: perguntasArea[0].areaWeight
+        });
+      }
+
+      const notaGeral = areas.reduce((acc, a) => acc + a.nota * a.peso, 0);
+      return { notaGeral: Math.round(notaGeral), areas };
+    }
+
+    function showResult() {
+      const resultado = calcularResultado();
+      const classificacao = classificarNota(resultado.notaGeral);
+
+      document.querySelectorAll('[id^="step-"]').forEach(el => {
+        el.classList.remove('step-active');
+        el.classList.add('step-hidden');
+      });
+      document.getElementById('step-result').classList.remove('step-hidden');
+      document.getElementById('step-result').classList.add('step-active');
+
+      document.getElementById('final-score').textContent = `${resultado.notaGeral}/100`;
+      document.getElementById('final-score').className = `text-5xl font-bold my-6 ${classificacao.color}`;
+      document.getElementById('final-classification').textContent = classificacao.label;
+      document.getElementById('final-classification').className = `text-xl font-semibold mb-4 ${classificacao.color}`;
+      document.getElementById('final-message').textContent = classificacao.message;
+
+      const sorted = [...resultado.areas].sort((a, b) => a.nota - b.nota);
+      const summary = document.getElementById('areas-summary');
+      summary.innerHTML = sorted.map(a => `
+        <div class="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
+          <span class="font-medium">${a.label}</span>
+          <span class="font-bold ${a.nota <= 40 ? 'text-red-500' : a.nota <= 60 ? 'text-orange-500' : a.nota <= 80 ? 'text-yellow-600' : 'text-green-600'}">${a.nota}/100</span>
+        </div>
+      `).join('');
+    }
+
+    function showLeadForm() {
+      document.getElementById('step-result').classList.remove('step-active');
+      document.getElementById('step-result').classList.add('step-hidden');
+      document.getElementById('step-lead').classList.remove('step-hidden');
+      document.getElementById('step-lead').classList.add('step-active');
+    }
+
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwY9vuPvXicwD2eLKXoc2NN6GUoWANvMm0yuEICXjO_S55QOl1-_WUor34k4B5RhLyE/exec';
+
+    function submitLead(e) {
+      e.preventDefault();
+
+      const btn = e.target.querySelector('button[type="submit"]');
+      const originalText = btn.textContent;
+      btn.textContent = 'Enviando...';
+      btn.disabled = true;
+
+      const nome = document.getElementById('lead-name').value;
+      const email = document.getElementById('lead-email').value;
+      const phone = document.getElementById('lead-phone').value;
+      const resultado = calcularResultado();
+
+      const payload = {
+        nome,
+        email,
+        phone,
+        notaGeral: resultado.notaGeral,
+        classificacao: resultado.classificacao,
+        areas: resultado.areas,
+        respostas
+      };
+
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(() => {
+        document.getElementById('step-lead').classList.remove('step-active');
+        document.getElementById('step-lead').classList.add('step-hidden');
+        document.getElementById('step-thanks').classList.remove('step-hidden');
+        document.getElementById('step-thanks').classList.add('step-active');
+      })
+      .catch((error) => {
+        console.error('Erro ao enviar:', error);
+        alert('Houve um erro ao enviar. Tente novamente.');
+      })
+      .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      });
+    }
+  </script>
+</body>
+</html>
